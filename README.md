@@ -1,7 +1,7 @@
 monkey (also known as 'typewriter')
 ======
 
-Just put all these files in the same folder on a linux box and they'll all work, providing you set up the cron job as below:
+Just put all these files in the same folder on a linux box and they'll all work together, providing you set up the cron job as below:
 
 Cron Job:
 ======
