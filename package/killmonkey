@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+source "config.sh"
+source "functions.sh"
+
+function kill_monkey {
+    local pid=$(adb -s "$1" shell ps | awk "{ if (\$9 ~ /monkey/) print \$2 }")
+    [ -n "$pid" ] && adb -s "$1" shell kill $pid || return 1
+}
+
+function main {
+    echo "Detecting devices running monkey..."
+    local devices=("$PWD/run/"*".pid")
+
+    echo "Killing monkey processes..."
+    if [ "$devices" != "$PWD/run/*.pid" -a ${#devices[@]} -gt 0 ]; then
+        for device in "${devices[@]}"; do
+            device="${device##*/}"
+            device="${device%.pid}"
+            local pidfile="$PWD/run/$device.pid"
+            if [ -e "$pidfile" ]; then
+                local pid=$(read < "$pidfile" && echo "$REPLY")
+                rm "$pidfile"
+                kill $pid
+            fi
+            kill_monkey "$device" &
+        done
+        wait
+    else
+        echo "No monkeys to kill." >&2
+        return 1
+    fi
+}
+
+main "$@"

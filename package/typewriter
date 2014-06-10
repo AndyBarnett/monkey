@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+
+source "config.sh"
+source "functions.sh"
+
+declare date="$(date "+%y.%m.%d-%H%M")"
+
+function monkey {
+    local logfile="$PWD/log/$date/$1.log"
+    local pidfile="$PWD/run/$1.pid"
+
+    echo "$1: Starting monkey."
+    true > "$pidfile"
+    while true; do
+        adb -s "$1" wait-for-device | while read -r; do echo "$REPLY"; done
+        [ -e "$pidfile" ] || break
+        adb -s "$1" shell monkey --kill-process-after-error -p "com.we7.player" -s $RANDOM "${monkey_args[@]}" 2147483647 | sed $'s/\r$//' >> "$logfile" & #XXX 2013-10-17T10:44:06+0100
+        echo "$!" > "$pidfile"
+        wait $!
+        [ $? -gt 127 ] && break
+        echo "*** END OF CRASH ***" >> "$logfile"
+    done
+}
+
+function install_latest {
+    echo "$1: Installing latest build..."
+    adb -s "$1" install -r "$latest" | while read -r; do echo "$1: $REPLY"; done
+}
+
+function main {
+    [ -e "$PWD/log" ] || mkdir "$PWD/log"
+    [ -e "$PWD/run" ] || mkdir "$PWD/run"
+
+    echo "Determining latest build in $android..."
+
+    #local builds=($(echo "$dropbox/Android/release-"??.??.??-????-???????".apk"))
+    #local builds=($(echo "$dropbox/Android/develop-MarketKey.apk"))
+    local builds=($(echo "$dropbox/Android/release-MarketKey-"??.??.??-????-???????".apk"))
+
+    local latest="${builds[$[${#builds[@]}-1]]}" # Actually, this is perfectly fine.
+    echo "Latest build is $latest."
+    echo "${latest##*/}" > "latest"
+
+    echo "Probing for attached devices..."
+    local devices=($(adb devices | dup | filter_devices))
+    echo "${#devices[@]} devices found."
+
+    if [ ${#devices[@]} -gt 0 ]; then
+        mkdir "$PWD/log/$date"
+        [ -e "$PWD/log/latest" ] && rm "$PWD/log/latest"
+        ln -s "$PWD/log/$date" "$PWD/log/latest"
+        for device in "${devices[@]}"; do
+            install_latest "$device" && monkey "$device" &
+        done
+#       wait || return $?
+#       for device in "${devices[@]}"; do
+#           monkey "$device" &
+#       done
+    else
+        return 1
+    fi
+}
+
+main "$@"
